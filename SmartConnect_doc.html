@@ -1,0 +1,77 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta http-equiv="Content-Style-Type" content="text/css">
+  <title></title>
+  <meta name="Generator" content="Cocoa HTML Writer">
+  <meta name="CocoaVersion" content="1038.36">
+  <style type="text/css">
+    p.p1 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px Helvetica}
+    p.p2 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px Helvetica; min-height: 14.0px}
+    li.li1 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px Helvetica}
+    span.Apple-tab-span {white-space:pre}
+    ul.ul1 {list-style-type: check}
+    ul.ul2 {list-style-type: hyphen}
+  </style>
+</head>
+<body>
+<p class="p1">SMART CONNECT</p>
+<p class="p2"><br></p>
+<p class="p1">This is a utility function aimed at stream-oriented Internet client applications including Web browsers, Video players and interactive games. It is intended to replace the typical sequence of calls an application is required to make in order to connect to a network server at a certain TCP port. The calls replaced by this function include name resolution (e.g. gethostbyname(), an optional port number resolution e.g. getservicebyname(), creation of a socket with socket() and the initiation of a connection using the connect()<span class="Apple-converted-space">  </span>system call.</p>
+<p class="p2"><br></p>
+<p class="p1">It does not merely replace these calls to simplify a client application programming, but is doing so with increased sophistication to improve functionality and performance of the client. By replacing the traditional call sequence with this function the client will be able to:</p>
+<p class="p2"><br></p>
+<ul class="ul1">
+  <li class="li1">Make the application compatible with both IPv4, and IPv6 and virtually any dual stack setup;</li>
+  <li class="li1">Automatically select the best server address available between IPv6 and IPv4;</li>
+  <li class="li1">Given a choice of multiple equivalent geographically distributed servers, the client will select the closest one based on response time;</li>
+  <li class="li1">Will cache the result of DNS name lookup and server selection locally to make the cost of creating new or additional connections the lowest, and gravitate towards the same server when possible.</li>
+</ul>
+<p class="p2"><br></p>
+<p class="p1">It should be noted that the algorithm described in additional details below is designed to comply with the stateful mechanism described in the EFT "Happy Eye Balls" draft<span class="Apple-converted-space"> </span></p>
+<p class="p2"><br></p>
+<p class="p1">THE ALGORITHM</p>
+<p class="p2"><br></p>
+<p class="p1">At the heart of this module is the POSIX 1003.1 compliant<span class="Apple-converted-space">  </span>getaddrinfo() call utilized to resolve the sever domain name into one or more server IP addresses of either protocol family. Server domain names are mapped to several IP addresses either for the purpose of supporting both IPv4 and IPv6 protocols, or to load-balance the clients across a number of "equivalent" servers, or all of the above resins combined. The returned addresses are either all lead to the same physical server, or to a collection of servers that host identical content, hence termed equivalent.</p>
+<p class="p2"><br></p>
+<p class="p1">Once the DNS resolution is complete, the module proceeds to initiate a TCP connection to each and every address returned concurrently, and proceeds to wait for any of the initiated connection to be established. It is the premise of this code that the server that is closest to the client will usually be the first to respond and establish a connection. Mostly proximity will be in terms of geographical distance, but at times when portions of the network greatly vary in throughput, the first server to respond can still be shown as the best choice for achieving the best client experience. In a dual-stack situation the choice of protocol family will also follow the same rule, with the aim of making the choice theta will result in the best experience. It will seamlessly mitigate any IPv6 breakage issues when these exist. It is expectant that given the choice of both IPv6 and IPv4 route to the same server, an IPv6 connection will be established sooner because the lack of Network Address Translation gateways on the route should lead to a lower round-trip delay, and as long as IPv6 is being phased-in, it is without a doubt expected to be much less congested, and thus a slight but highly desirable bias in favor of IPv6 does exist in this implementation, but without sacrificing the quality of client experience.</p>
+<p class="p2"><br></p>
+<p class="p1">Once at least one connection is established, the remaining pending connections will be aborted, and a socked descriptor to the established connection is returned to the application, just like the result of connectI(), and that returned connection is set up in blocking mode, just lie that returned by connect().</p>
+<p class="p2"><br></p>
+<p class="p1">The successful connection is also stored in a local cache, along with the name of the server and the service requested, so that any subsequent repeated connection request will employ a shortcut, skip the DNS resolution and concurrent connection steps, and establish a connection with the same server as was found to be preferable just a short while earlier. The preference of the same address for repeated connection request is not unconditional though: when the choice of address is saved in the local cache, it is saved along with the time it took to establish a connection. If the cached address does not establish a connection within twice the anticipated time, it may be a sign of a change in the client network configuration or a change in the network topology or congestion climate, in which case the algorithm will commence a new DNS resolution and concurrent connection process, while continuing to wait for a connection to be established with the cached address.</p>
+<p class="p2"><br></p>
+<p class="p1">The locally cached entries are also aged out after e.g. 10 minutes (per IETF draft), or when the cache fills up, oldest cache entries will be displaced to make room for newest ones. Although the concurrent connection method of selecting the preferred address and protocol may seem overly aggressive, the use of local cache assures that these processes are not repeated too often, so that the additional traffic generated by the concurrent connection selection is kept below the nuisance level.</p>
+<p class="p2"><br></p>
+<p class="p1">FUNCTIONS</p>
+<p class="p2"><br></p>
+<p class="p1">The module provides two callable functions:</p>
+<p class="p2"><br></p>
+<ul class="ul2">
+  <li class="li1">smart_connect() which takes the domain name of the desired server and the name of the service (i.e. TCP port), and returns a socket descriptor. As with connect() it may block up to the system-wide default TCP connection timeout, which is typically set at 2 minutes.</li>
+  <li class="li1">smart_connect_with_timeout() is similar, but adds an upper bound on the time the function is allowed to block, so that if none of the servers responds within the allotted timeout, the function will return with an error.</li>
+</ul>
+<p class="p2"><br></p>
+<p class="p1">ERROR REPORTING</p>
+<p class="p2"><br></p>
+<p class="p1">If either function fails to establish a connection,, it will return -1 with &lt;errno&gt; set to the code appropriate for the error condition encountered. Note that DNS name resolution has a separate error code name space, but this module performs a mapping of the DNS error codes to one of the standard &lt;errno&gt; codes. Most notably when the domain server name is not found or does not contain any IPv4 or IPv6 address information,&lt;errno&gt; will be set to<span class="Apple-converted-space">  </span>EADDRNOTAVAIL.</p>
+<p class="p2"><br></p>
+<p class="p1">COMPILE OPTIONS</p>
+<p class="p2"><br></p>
+<p class="p1">The following compile-time options are available:</p>
+<p class="p2"><br></p>
+<p class="p1">_UNITEST<span class="Apple-tab-span">	</span>- enable a unit-test "main()" function</p>
+<p class="p1">_DEBUG<span class="Apple-tab-span">	</span>- enable diagnostic "printf()" messages</p>
+<p class="p1">PTHREAD<span class="Apple-tab-span">	</span>- should be defined when the module is used in threaded application</p>
+<p class="p1">SMART_CONN_CACHE_SIZE</p>
+<p class="p1"><span class="Apple-tab-span">	</span><span class="Apple-tab-span">	</span>- the size of the local cache. (default is 16) Setting the size at 0 disables the local cache functionality.</p>
+<p class="p1">SMART_CONN_CACHE_TIME</p>
+<p class="p1"><span class="Apple-tab-span">	</span><span class="Apple-tab-span">	</span>- the time in seconds before each cache entry is aged out, and should be set to 600 seconds for IETF draft compliance.</p>
+<p class="p1">SMART_CONN_MIN_TIMEOUT</p>
+<p class="p1"><span class="Apple-tab-span">	</span><span class="Apple-tab-span">	</span>- a lower bound on internal time out values in milliseconds, provides a margin of variance to server response times.</p>
+<p class="p2"><br></p>
+<p class="p1">© Copyright, CERTARETE 2011. All rights reserved.</p>
+<p class="p2"><br></p>
+<p class="p2"><br></p>
+</body>
+</html>
